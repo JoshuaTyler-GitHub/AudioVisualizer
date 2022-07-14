@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+  <!-- HEAD -->
+  <head>
+    <meta charset="utf-8" />
+    <link id="favicon" rel="icon" href="public/favicon.ico" />
+    <link rel="manifest" href="public/manifest.json" />
+    <link rel="stylesheet" href="bootstrap.min.css" />
+    <meta
+      name="viewport"
+      content="width=device-width, height=device-height, viewport-fit=cover, initial-scale=1"
+    />
+    <meta name="theme-color" content="#000000" />
+    <meta name="HelloWorld" content="Matrix-HelloWorld" />
+    <style media="screen">
+      body {
+        background: #444054;
+      }
+      noscript {
+        color: #fff;
+      }
+      #canvas {
+        background: #2f243a;
+        height: 300px;
+        width: 100%;
+      }
+    </style>
+    <title id="title">Matrix-HelloWorld</title>
+  </head>
+
+  <!-- BODY -->
+  <body>
+    <div id="root" class="container-fluid">
+      <div class="row d-flex justify-content-center p-5">
+        <canvas id="canvas"></canvas>
+      </div>
+      <div class="row d-flex justify-content-center">
+        <audio id="audioPlayer" controls loop preload onplay="playAudio()">
+          <source
+            src="./sounds/Pink Floyd - Another Brick In The Wall Part Two.mp3"
+            type="audio/mp3"
+          />
+          Your browser does not support the audio element.
+        </audio>
+      </div>
+    </div>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+  </body>
+
+  <!-- JAVASCRIPT -->
+  <script type="text/javascript">
+    // canvas
+    const canvas = document.getElementById('canvas');
+    canvas.height =
+      Number(canvas.clientHeight) * Number(window.devicePixelRatio);
+    canvas.width = Number(canvas.clientWidth) * Number(window.devicePixelRatio);
+    const context = canvas.getContext('2d');
+    const refreshRate = Number('100');
+
+    // audio
+    const PFABITW = './Pink Floyd - Another Brick In The Wall Part Two.mp3';
+    const audioPlayer = document.getElementById('audioPlayer');
+    let audioAnalyzer = null;
+    let audioBufferLength = null;
+    let audioContext = null;
+    let audioData = null;
+    let audioSource = null;
+    let isAudioInitialized = Boolean(false);
+
+    // level bars
+    const barColorEmpty = String('rgb(47, 36, 58)');
+    const barColorHigh = [213, 41, 65];
+    const barColorLow = [67, 170, 139];
+    const barColorMed = [252, 213, 129];
+    const barColorPeak = [0, 0, 255];
+    const barHeight = Number('10');
+    const barMargin = Number('2');
+    const barWidth = Number('10');
+    const containerColor = [68, 64, 84];
+    let activeLevels = Number('1');
+    let maxAmplitudes = [];
+
+    const drawLevels = () => {
+      const isPaused = Boolean(audioPlayer.paused);
+      if (audioData !== null && !isPaused) {
+        // clear canvas
+        context.fillStyle = barColorEmpty;
+        context.fillRect(0, 0, canvas.width, canvas.height);
+
+        // get audio data
+        audioAnalyzer.getByteFrequencyData(audioData);
+
+        // calculate bar drawing
+        const barXCount = Math.floor(canvas.width / (Number(barWidth) + Number(barMargin))); // prettier-ignore
+        const barYCount = Math.floor(canvas.height / (Number(barHeight) + Number(barMargin))); // prettier-ignore
+        const samplesPerBar = Math.floor(audioData.length / barXCount);
+        const barWidthOverride = Math.floor(canvas.width / (Number(activeLevels)));
+
+        for (let x = 0; x < barXCount; x++) {
+          const offsetX = Number(x) * (Number(barWidthOverride) + Number(barMargin)) + Number(barMargin); // prettier-ignore
+          const samplesStart = Number(x) * Number(samplesPerBar);
+          const samplesEnd = Number(samplesStart) + Number(samplesPerBar);
+          const samples = audioData.slice(samplesStart, samplesEnd);
+
+          let amplitude = Number('0');
+          for (const i in samples) {
+            amplitude += Number(samples[i]);
+          }
+
+          if (amplitude > 0) {
+            // update amplitudes
+            if (!maxAmplitudes[x] || amplitude > maxAmplitudes[x]) {
+              maxAmplitudes[x] = Number(amplitude);
+              let activeLevelsCount = Number('0');
+              for (const i in maxAmplitudes) {
+                if (maxAmplitudes[i] && maxAmplitudes[i] !== 0) {
+                  activeLevelsCount++;
+                }
+              }
+              activeLevels = Number(activeLevelsCount);
+            }
+
+            // draw level bars
+            for (let y = 0; y < barYCount; y++) {
+              const offsetY = Number(canvas.height) - (Number(y) * (Number(barHeight) + Number(barMargin))); // prettier-ignore
+              const amplitudeMultiplier = Number(amplitude / maxAmplitudes[x]);
+              const yPeak = Math.floor(barYCount * amplitudeMultiplier);
+              const bluePoint = Math.max(barYCount - 4, 1);
+              if (y < yPeak) {
+                if( y > bluePoint) {
+                  context.fillStyle = String('rgb(0, 0, 255)');
+                } else {
+                  const colorIntensity = Number(y / bluePoint);
+                  context.fillStyle = String(
+                    `rgb(${gradientarize(
+                      [barColorLow, barColorMed, barColorHigh],
+                      colorIntensity,
+                    ).join(', ')}`,
+                  );
+                }
+                context.fillRect(offsetX, offsetY, barWidthOverride, barHeight);
+              } else if(y === yPeak && y === (barYCount - 1)) {
+                context.fillStyle = String('rgb(255, 255, 255)');
+                context.fillRect(offsetX, offsetY, barWidthOverride, barHeight);
+              }
+            }
+          }
+        }
+      }
+    };
+
+    const gradientarize = (colors, weight) => {
+      const offset = Number(weight * (colors.length - 1));
+      const ceiled = Number(Math.ceil(offset));
+      const floored = Number(Math.floor(offset));
+      const rounded = Number(Math.round(offset));
+
+      const primaryColorIndex = Number(rounded);
+      const isRoundedUp = Boolean(primaryColorIndex > floored);
+      const secondaryColorIndex = Number(isRoundedUp ? floored : ceiled);
+
+      const secondaryWeight = Math.abs(Number(offset - rounded));
+      const color1 = Array.from(colors[primaryColorIndex]);
+      const color2 = Array.from(colors[secondaryColorIndex]);
+      const weight1 = Number(1 - secondaryWeight);
+      const weight2 = Number(secondaryWeight);
+
+      return [
+        Number(Math.round(color1[0] * weight1 + color2[0] * weight2)),
+        Number(Math.round(color1[1] * weight1 + color2[1] * weight2)),
+        Number(Math.round(color1[2] * weight1 + color2[2] * weight2)),
+      ];
+    };
+
+
+
+
+
+    
+
+    const playAudio = () => {
+      if (!isAudioInitialized) {
+        isAudioInitialized = Boolean(true);
+        audioContext = new AudioContext();
+        audioGain = audioContext.createGain();
+        audioAnalyzer = audioContext.createAnalyser();
+        audioSource = audioContext.createMediaElementSource(audioPlayer);
+
+        audioAnalyzer.fftSize = Number('2048');
+        audioBufferLength = audioAnalyzer.frequencyBinCount;
+        audioData = new Uint8Array(audioBufferLength);
+        audioAnalyzer.getByteFrequencyData(audioData);
+
+        audioSource
+          .connect(audioGain)
+          .connect(audioAnalyzer)
+          .connect(audioContext.destination);
+      }
+    };
+
+    // repeat drawLevels() every 10ms
+    setInterval(drawLevels, 10);
+  </script>
+</html>

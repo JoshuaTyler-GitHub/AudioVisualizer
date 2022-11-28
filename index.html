@@ -58,8 +58,9 @@
     const refreshRate = Number('100');
 
     // audio
-    const PFABITW = './Pink Floyd - Another Brick In The Wall Part Two.mp3';
+    const PFABITW = String('./Pink Floyd - Another Brick In The Wall Part Two.mp3');
     const audioPlayer = document.getElementById('audioPlayer');
+    let audioStream = null;
     let audioAnalyzer = null;
     let audioBufferLength = null;
     let audioContext = null;
@@ -170,13 +171,7 @@
         Number(Math.round(color1[1] * weight1 + color2[1] * weight2)),
         Number(Math.round(color1[2] * weight1 + color2[2] * weight2)),
       ];
-    };
-
-
-
-
-
-    
+    };  
 
     const playAudio = () => {
       if (!isAudioInitialized) {
@@ -184,7 +179,8 @@
         audioContext = new AudioContext();
         audioGain = audioContext.createGain();
         audioAnalyzer = audioContext.createAnalyser();
-        audioSource = audioContext.createMediaElementSource(audioPlayer);
+        // audioSource = audioContext.createMediaElementSource(audioPlayer);
+        audioSource = audioContext.createMediaStreamSource(audioStream);
 
         audioAnalyzer.fftSize = Number('2048');
         audioBufferLength = audioAnalyzer.frequencyBinCount;
@@ -197,6 +193,16 @@
           .connect(audioContext.destination);
       }
     };
+
+    // navigator audio
+    navigator.getUserMedia({audio:true}, 
+      function(stream) {
+        start_microphone(stream);
+      },
+      function(e) {
+        alert('Error capturing audio.');
+      }
+    );
 
     // repeat drawLevels() every 10ms
     setInterval(drawLevels, 10);
